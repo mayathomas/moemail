@@ -481,7 +481,7 @@ const main = async () => {
     migrateDatabase();
     await checkAndCreateKVNamespace();
     await checkAndCreatePages();
-    pushPagesSecret();
+    // pushPagesSecret();
     deployPages();
     deployEmailWorker();
     deployCleanupWorker();
