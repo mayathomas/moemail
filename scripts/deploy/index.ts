@@ -277,7 +277,6 @@ const checkAndCreatePages = async () => {
 const pushPagesSecret = () => {
   console.log("🔐 Pushing environment secrets to Pages...");
 
-  // 定义运行时所需的环境变量列表
   const runtimeEnvVars = [
     'AUTH_GITHUB_ID', 
     'AUTH_GITHUB_SECRET', 
@@ -287,77 +286,45 @@ const pushPagesSecret = () => {
   ];
 
   try {
-    // 确保.env文件存在
     if (!existsSync(resolve('.env'))) {
       setupEnvFile();
     }
 
-    // 读取.env文件内容
     const envContent = readFileSync(resolve('.env'), 'utf-8');
     
-    // 解析环境变量为对象
     const secrets: Record<string, string> = {};
     
     envContent.split('\n').forEach(line => {
       const trimmedLine = line.trim();
+      if (!trimmedLine || trimmedLine.startsWith('#')) return;
       
-      // 跳过注释和空行
-      if (!trimmedLine || trimmedLine.startsWith('#')) {
-        return;
-      }
-      
-      // 解析键值对
       const equalIndex = trimmedLine.indexOf('=');
-      if (equalIndex === -1) {
-        return;
-      }
+      if (equalIndex === -1) return;
       
       const key = trimmedLine.substring(0, equalIndex).trim();
       let value = trimmedLine.substring(equalIndex + 1).trim();
-      
-      // 移除引号
       value = value.replace(/^["']|["']$/g, '');
       
-      // 只保留运行时所需的环境变量，且值不为空
       if (runtimeEnvVars.includes(key) && value.length > 0) {
         secrets[key] = value;
       }
     });
 
-    // 检查是否有需要推送的secrets
     if (Object.keys(secrets).length === 0) {
       console.log("⚠️ No runtime secrets found to push");
       return;
     }
 
-    // 创建JSON格式的临时文件
-    const runtimeEnvFile = resolve('.env.runtime.json');
-    writeFileSync(runtimeEnvFile, JSON.stringify(secrets, null, 2));
-
     console.log(`📝 Found ${Object.keys(secrets).length} secrets to push:`, Object.keys(secrets).join(', '));
 
-    // 使用临时文件推送secrets
-    execSync(`pnpm dlx wrangler pages secret bulk /path/to/.env.runtime.json`);
-
-    // 清理临时文件
-    if (existsSync(runtimeEnvFile)) {
-      execSync(`rm ${runtimeEnvFile}`, { stdio: "inherit" });
+    for (const [key, value] of Object.entries(secrets)) {
+      console.log(`  Pushing ${key}...`);
+      execSync(`printf "${value}" | pnpm dlx wrangler pages secret put ${key} --project-name ${PROJECT_NAME}`, { stdio: "pipe" });
     }
 
     console.log("✅ Secrets pushed successfully");
   } catch (error) {
     console.error("❌ Failed to push secrets:", error);
-    
-    // 确保清理临时文件
-    const runtimeEnvFile = resolve('.env.runtime.json');
-    if (existsSync(runtimeEnvFile)) {
-      try {
-        execSync(`rm ${runtimeEnvFile}`, { stdio: "inherit" });
-      } catch (cleanupError) {
-        console.error("⚠️ Failed to cleanup temporary file:", cleanupError);
-      }
-    }
-    
     throw error;
   }
 };
@@ -481,7 +448,7 @@ const main = async () => {
     migrateDatabase();
     await checkAndCreateKVNamespace();
     await checkAndCreatePages();
-    // pushPagesSecret();
+    pushPagesSecret();
     deployPages();
     deployEmailWorker();
     deployCleanupWorker();
