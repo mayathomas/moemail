@@ -131,6 +131,7 @@ export const {
             parsedCredentials = authSchema.parse({ username, password, turnstileToken })
           } catch (error) {
             throw new Error("输入格式不正确")
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
           }
 
           const verification = await verifyTurnstileToken(parsedCredentials.turnstileToken)
