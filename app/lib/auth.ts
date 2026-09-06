@@ -234,8 +234,7 @@ export const {
     session: {
     strategy: "jwt",
   },
-  };
-})
+}))
 
 export async function register(username: string, password: string) {
   const db = createDb()
