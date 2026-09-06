@@ -106,11 +106,11 @@ export const {
       clientSecret: process.env.AUTH_GITHUB_SECRET,
       allowDangerousEmailAccountLinking: true,
     }),
-    Google({
+    ...(process.env.AUTH_GOOGLE_ID ? [Google({
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
       allowDangerousEmailAccountLinking: true,
-    }),
+    })] : []),
     CredentialsProvider({
       name: "Credentials",
       credentials: {
