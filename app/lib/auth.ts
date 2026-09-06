@@ -94,7 +94,7 @@ export const {
   signIn,
   signOut
 } = NextAuth(() => {
-  const env = getRequestContext().env as Record<string, string>;
+  const env = getRequestContext().env as unknown as Record<string, string>;
   return {
     secret: env.AUTH_SECRET,
     trustHost: true,
