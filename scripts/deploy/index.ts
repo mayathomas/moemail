@@ -319,7 +319,7 @@ const pushPagesSecret = () => {
 
     for (const [key, value] of Object.entries(secrets)) {
       console.log(`  Pushing ${key}...`);
-      execSync(`printf "${value}" | pnpm dlx wrangler pages secret put ${key} --project-name ${PROJECT_NAME}`, { stdio: "pipe" });
+      execSync(`pnpm dlx wrangler pages secret put ${key} --project-name ${PROJECT_NAME}`, { input: value, stdio: ["pipe", "pipe", "pipe"] });
     }
 
     console.log("✅ Secrets pushed successfully");
