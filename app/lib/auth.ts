@@ -93,27 +93,25 @@ export const {
   auth,
   signIn,
   signOut
-} = NextAuth(() => {
-  const env = getRequestContext().env as unknown as Record<string, string>;
-  return {
-    secret: env.AUTH_SECRET,
-    trustHost: true,
-    adapter: DrizzleAdapter(createDb(), {
-      usersTable: users,
-      accountsTable: accounts,
+} = NextAuth(() => ({
+  secret: process.env.AUTH_SECRET,
+  trustHost: true,
+  adapter: DrizzleAdapter(createDb(), {
+    usersTable: users,
+    accountsTable: accounts,
+  }),
+  providers: [
+    GitHub({
+      clientId: process.env.AUTH_GITHUB_ID,
+      clientSecret: process.env.AUTH_GITHUB_SECRET,
+      allowDangerousEmailAccountLinking: true,
     }),
-    providers: [
-      GitHub({
-        clientId: env.AUTH_GITHUB_ID,
-        clientSecret: env.AUTH_GITHUB_SECRET,
-        allowDangerousEmailAccountLinking: true,
-      }),
-      ...(env.AUTH_GOOGLE_ID ? [Google({
-        clientId: env.AUTH_GOOGLE_ID,
-        clientSecret: env.AUTH_GOOGLE_SECRET,
-        allowDangerousEmailAccountLinking: true,
-      })] : []),
-      CredentialsProvider({
+    ...(process.env.AUTH_GOOGLE_ID ? [Google({
+      clientId: process.env.AUTH_GOOGLE_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      allowDangerousEmailAccountLinking: true,
+    })] : []),
+    CredentialsProvider({
         name: "Credentials",
         credentials: {
           username: { label: "用户名", type: "text", placeholder: "请输入用户名" },
