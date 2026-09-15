@@ -112,130 +112,129 @@ export const {
       allowDangerousEmailAccountLinking: true,
     })] : []),
     CredentialsProvider({
-        name: "Credentials",
-        credentials: {
-          username: { label: "用户名", type: "text", placeholder: "请输入用户名" },
-          password: { label: "密码", type: "password", placeholder: "请输入密码" },
-        },
-        async authorize(credentials) {
-          if (!credentials) {
-            throw new Error("请输入用户名和密码")
-          }
+      name: "Credentials",
+      credentials: {
+        username: { label: "用户名", type: "text", placeholder: "请输入用户名" },
+        password: { label: "密码", type: "password", placeholder: "请输入密码" },
+      },
+      async authorize(credentials) {
+        if (!credentials) {
+          throw new Error("请输入用户名和密码")
+        }
 
-          const { username, password, turnstileToken } = credentials as Record<string, string | undefined>
+        const { username, password, turnstileToken } = credentials as Record<string, string | undefined>
 
-          let parsedCredentials: AuthSchema
-          try {
-            parsedCredentials = authSchema.parse({ username, password, turnstileToken })
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          } catch (error) {
-            throw new Error("输入格式不正确")
-          }
-
-          const verification = await verifyTurnstileToken(parsedCredentials.turnstileToken)
-          if (!verification.success) {
-            if (verification.reason === "missing-token") {
-              throw new Error("请先完成安全验证")
-            }
-            throw new Error("安全验证未通过")
-          }
-
-          const db = createDb()
-
-          const user = await db.query.users.findFirst({
-            where: eq(users.username, parsedCredentials.username),
-          })
-
-          if (!user) {
-            throw new Error("用户名或密码错误")
-          }
-
-          const isValid = await comparePassword(parsedCredentials.password, user.password as string)
-          if (!isValid) {
-            throw new Error("用户名或密码错误")
-          }
-
-          return {
-            ...user,
-            password: undefined,
-          }
-        },
-      }),
-    ],
-    events: {
-      async signIn({ user }) {
-        if (!user.id) return
-
+        let parsedCredentials: AuthSchema
         try {
-          const db = createDb()
-          const existingRole = await db.query.userRoles.findFirst({
-            where: eq(userRoles.userId, user.id),
-          })
+          parsedCredentials = authSchema.parse({ username, password, turnstileToken })
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (error) {
+          throw new Error("输入格式不正确")
+        }
 
-          if (existingRole) return
+        const verification = await verifyTurnstileToken(parsedCredentials.turnstileToken)
+        if (!verification.success) {
+          if (verification.reason === "missing-token") {
+            throw new Error("请先完成安全验证")
+          }
+          throw new Error("安全验证未通过")
+        }
 
+        const db = createDb()
+
+        const user = await db.query.users.findFirst({
+          where: eq(users.username, parsedCredentials.username),
+        })
+
+        if (!user) {
+          throw new Error("用户名或密码错误")
+        }
+
+        const isValid = await comparePassword(parsedCredentials.password, user.password as string)
+        if (!isValid) {
+          throw new Error("用户名或密码错误")
+        }
+
+        return {
+          ...user,
+          password: undefined,
+        }
+      },
+    }),
+  ],
+  events: {
+    async signIn({ user }) {
+      if (!user.id) return
+
+      try {
+        const db = createDb()
+        const existingRole = await db.query.userRoles.findFirst({
+          where: eq(userRoles.userId, user.id),
+        })
+
+        if (existingRole) return
+
+        const defaultRole = await getDefaultRole()
+        const role = await findOrCreateRole(db, defaultRole)
+        await assignRoleToUser(db, user.id, role.id)
+      } catch (error) {
+        console.error('Error assigning role:', error)
+      }
+    },
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+        token.name = user.name || user.username
+        token.username = user.username
+        token.image = user.image || generateAvatarUrl(token.name as string)
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (token && session.user) {
+        session.user.id = token.id as string
+        session.user.name = token.name as string
+        session.user.username = token.username as string
+        session.user.image = token.image as string
+
+        const db = createDb()
+        let userRoleRecords = await db.query.userRoles.findMany({
+          where: eq(userRoles.userId, session.user.id),
+          with: { role: true },
+        })
+
+        if (!userRoleRecords.length) {
           const defaultRole = await getDefaultRole()
           const role = await findOrCreateRole(db, defaultRole)
-          await assignRoleToUser(db, user.id, role.id)
-        } catch (error) {
-          console.error('Error assigning role:', error)
-        }
-      },
-    },
-    callbacks: {
-      async jwt({ token, user }) {
-        if (user) {
-          token.id = user.id
-          token.name = user.name || user.username
-          token.username = user.username
-          token.image = user.image || generateAvatarUrl(token.name as string)
-        }
-        return token
-      },
-      async session({ session, token }) {
-        if (token && session.user) {
-          session.user.id = token.id as string
-          session.user.name = token.name as string
-          session.user.username = token.username as string
-          session.user.image = token.image as string
-
-          const db = createDb()
-          let userRoleRecords = await db.query.userRoles.findMany({
-            where: eq(userRoles.userId, session.user.id),
-            with: { role: true },
-          })
-
-          if (!userRoleRecords.length) {
-            const defaultRole = await getDefaultRole()
-            const role = await findOrCreateRole(db, defaultRole)
-            await assignRoleToUser(db, session.user.id, role.id)
-            userRoleRecords = [{
-              userId: session.user.id,
-              roleId: role.id,
-              createdAt: new Date(),
-              role: role
-            }]
-          }
-
-          session.user.roles = userRoleRecords.map(ur => ({
-            name: ur.role.name,
-          }))
-
-          const userAccounts = await db.query.accounts.findMany({
-            where: eq(accounts.userId, session.user.id),
-          })
-
-          session.user.providers = userAccounts.map(account => account.provider)
+          await assignRoleToUser(db, session.user.id, role.id)
+          userRoleRecords = [{
+            userId: session.user.id,
+            roleId: role.id,
+            createdAt: new Date(),
+            role: role
+          }]
         }
 
-        return session
-      },
+        session.user.roles = userRoleRecords.map(ur => ({
+          name: ur.role.name,
+        }))
+
+        const userAccounts = await db.query.accounts.findMany({
+          where: eq(accounts.userId, session.user.id),
+        })
+
+        session.user.providers = userAccounts.map(account => account.provider)
+      }
+
+      return session
     },
-    session: {
-      strategy: "jwt",
-    },
-  };
-})
+  },
+  session: {
+    strategy: "jwt",
+  },
+}))
 
 export async function register(username: string, password: string) {
   const db = createDb()
